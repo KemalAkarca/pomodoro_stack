@@ -1,5 +1,3 @@
-// /tasks route dosyası: sadece view componentini çağırır
-
 import TasksPageView from "@/components/tasks/TasksPageView";
 
 export default function TasksPage() {
