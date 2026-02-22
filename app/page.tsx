@@ -1,7 +1,5 @@
-// /tasks route dosyası: sadece view componentini çağırır
+import { redirect } from "next/navigation";
 
-import TasksPageView from "@/components/tasks/TasksPageView";
-
-export default function TasksPage() {
-  return <TasksPageView />;
+export default function Page() {
+  redirect("/tasks");
 }

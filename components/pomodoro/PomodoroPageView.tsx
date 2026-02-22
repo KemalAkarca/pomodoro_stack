@@ -1,290 +1,187 @@
 "use client";
-// Pomodoro: timer + localStorage + task seçme + session kaydı + progress ring + success animation
 
-import { useEffect, useState } from "react";
+import { useState, useEffect } from "react";
+import { motion, AnimatePresence } from "framer-motion";
 import MainLayout from "@/components/layout/MainLayout";
-import type { Task } from "@/types/task";
-import type { PomodoroSession } from "@/types/session";
+import confetti from "canvas-confetti";
 
-export default function PomodoroPageView() {
-  // =========================
-  // Config
-  // =========================
+// Tip tanımı burada da olmalı (veya import edilmeli)
+interface Task {
+  id: string;
+  title: string;
+  done: boolean;
+  targetPomodoros: number;
+  completedPomodoros: number;
+}
 
-  // Test için 60 sn (istersen 25*60 yap: 1500)
-  const initialSeconds = 60;
-
-  // =========================
-  // State (HOOK'lar hep en üstte)
-  // =========================
-
-  const [secondsLeft, setSecondsLeft] = useState(initialSeconds);
-  const [isRunning, setIsRunning] = useState(false);
+export default function PomodoroView() {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [selectedTaskId, setSelectedTaskId] = useState<string>("");
+  const [isActive, setIsActive] = useState(false);
+  const [isBreak, setIsBreak] = useState(false);
+  const [timeLeft, setTimeLeft] = useState(25 * 60);
+  const [showFinishScreen, setShowFinishScreen] = useState(false);
 
-  // ✅ Pomodoro bitince success overlay
-  const [showSuccess, setShowSuccess] = useState(false);
-
-  // =========================
-  // Helpers
-  // =========================
-
-  // Basit id üretimi
-  const makeId = () => String(Date.now());
-
-  // Saniyeyi "MM:SS" formatına çevir
-  const formatTime = (totalSeconds: number) => {
-    const minutes = Math.floor(totalSeconds / 60);
-    const seconds = totalSeconds % 60;
-
-    return `${String(minutes).padStart(2, "0")}:${String(seconds).padStart(
-      2,
-      "0"
-    )}`;
-  };
-
-  // localStorage'a session ekleme
-  const saveSession = (taskId: string | null) => {
-    // taskId varsa title'ı tasks listesinden bul (snapshot)
-    const title = taskId ? tasks.find((t) => t.id === taskId)?.title : undefined;
-
-    const newSession: PomodoroSession = {
-      id: makeId(),
-      taskId,
-      taskTitle: title, // ✅ snapshot
-      durationMinutes: 25,
-      completedAt: new Date().toISOString(),
-    };
-
-    const saved = localStorage.getItem("sessions");
-    const list: PomodoroSession[] = saved ? JSON.parse(saved) : [];
-    list.unshift(newSession);
-    localStorage.setItem("sessions", JSON.stringify(list));
-  };
-
-  // =========================
-  // Effects
-  // =========================
-
-  // Sayfa ilk açılınca: localStorage'dan tasks verisini yükle
   useEffect(() => {
     const saved = localStorage.getItem("tasks");
-    if (!saved) return;
-
-    try {
-      const parsed: Task[] = JSON.parse(saved);
-      setTasks(parsed);
-    } catch {
-      // JSON bozuksa sessizce geç
-    }
+    if (saved) setTasks(JSON.parse(saved));
   }, []);
 
-  // Timer mantığı
   useEffect(() => {
-    if (!isRunning) return;
-
-    const interval = setInterval(() => {
-      setSecondsLeft((prev) => {
-        if (prev <= 1) {
-          clearInterval(interval);
-          setIsRunning(false);
-
-          // Süre bitti: session kaydet
-          saveSession(selectedTaskId ? selectedTaskId : null);
-
-          // ✅ Success overlay aç
-          setShowSuccess(true);
-
-          return 0;
-        }
-
-        return prev - 1;
-      });
-    }, 1000);
-
+    let interval: any;
+    if (isActive && timeLeft > 0) {
+      interval = setInterval(() => setTimeLeft((prev) => prev - 1), 1000);
+    } else if (timeLeft === 0 && isActive) {
+      handleComplete();
+    }
     return () => clearInterval(interval);
-  }, [isRunning]);
+  }, [isActive, timeLeft]);
 
-  // =========================
-  // Actions
-  // =========================
-
-  // Reset: timer'ı durdur ve başa al
-  const handleReset = () => {
-    setIsRunning(false);
-    setSecondsLeft(initialSeconds);
+  const handleComplete = () => {
+    setIsActive(false);
+    confetti({ particleCount: 150, spread: 70, origin: { y: 0.6 } });
+    
+    if (!isBreak) {
+      // ÇALIŞMA BİTTİ -> Görev ilerlemesini güncelle
+      const updatedTasks = tasks.map(t => 
+        t.id === selectedTaskId 
+          ? { ...t, completedPomodoros: t.completedPomodoros + 1 } 
+          : t
+      );
+      setTasks(updatedTasks);
+      localStorage.setItem("tasks", JSON.stringify(updatedTasks));
+      
+      setIsBreak(true);
+      setTimeLeft(5 * 60); // 5 dk mola
+    } else {
+      // MOLA BİTTİ -> Çalışmaya dön
+      setIsBreak(false);
+      setTimeLeft(25 * 60); // 25 dk çalışma
+    }
+    setShowFinishScreen(true);
   };
 
-  // Start / Pause / Resume (0:00 iken başlatma)
-  const handleToggle = () => {
-    if (secondsLeft === 0) return;
-    setIsRunning((prev) => !prev);
+  const startNextImmediately = () => {
+    setShowFinishScreen(false);
+    setIsActive(true);
   };
 
-  // Buton yazısı
-  const primaryLabel = isRunning
-    ? "Pause"
-    : secondsLeft === 0
-    ? "Done"
-    : secondsLeft === initialSeconds
-    ? "Start"
-    : "Resume";
+  const formatTime = (s: number) => 
+    `${Math.floor(s / 60).toString().padStart(2, '0')}:${(s % 60).toString().padStart(2, '0')}`;
 
-  // =========================
-  // Progress Ring
-  // =========================
+  const selectedTask = tasks.find(t => t.id === selectedTaskId);
 
-  const radius = 90;
-  const circumference = 2 * Math.PI * radius;
-  const progress = ((initialSeconds - secondsLeft) / initialSeconds) * 100;
-  const strokeDashoffset = circumference - (progress / 100) * circumference;
+  // 1. ZEN MODE (FULL SCREEN - BLACK OUT)
+  if (isActive) {
+    return (
+      <div className="fixed inset-0 z-[99999] bg-black flex flex-col items-center justify-center w-screen h-screen overflow-hidden">
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,_#111_0%,_#000_100%)] opacity-50" />
+        
+        <motion.div initial={{ y: -20, opacity: 0 }} animate={{ y: 0, opacity: 1 }} className="z-10 mb-8">
+          <div className="px-6 py-2 rounded-full bg-white/5 border border-white/10 backdrop-blur-md">
+            <p className="text-white/30 text-[9px] font-black uppercase tracking-[0.5em] text-center mb-1">
+              {isBreak ? "Rest & Recharge" : "Current Objective"}
+            </p>
+            <p className="text-indigo-400 font-bold tracking-widest text-sm text-center">
+              {isBreak ? "Break Time" : selectedTask?.title}
+            </p>
+          </div>
+        </motion.div>
 
-  // =========================
-  // Render
-  // =========================
+        <h1 className="text-[28vw] font-black text-white leading-none tabular-nums tracking-tighter z-10 select-none">
+          {formatTime(timeLeft)}
+        </h1>
+
+        <button 
+          onClick={() => setIsActive(false)} 
+          className="absolute bottom-16 z-10 text-white/20 font-black uppercase tracking-[0.6em] text-[10px] hover:text-red-500 transition-all"
+        >
+          Abort Mission
+        </button>
+      </div>
+    );
+  }
 
   return (
     <MainLayout>
-      {/* Hero */}
-      <div className="mb-10 text-center">
-        <h2 className="text-4xl font-semibold tracking-tight text-slate-900">
-          Pomodoro
-        </h2>
-        <p className="mt-2 text-sm text-slate-500">
-          Deep focus, one session at a time.
-        </p>
-      </div>
-
-      {/* Focus card */}
-      <div className="mx-auto max-w-xl">
-        <div className="rounded-3xl border border-blue-100 bg-white/80 p-8 shadow-sm backdrop-blur">
-          {/* Task select */}
-          <div className="mb-6">
-            <label className="mb-2 block text-xs font-medium text-slate-600">
-              Focus task
-            </label>
-
-            <select
-              value={selectedTaskId}
-              onChange={(e) => setSelectedTaskId(e.target.value)}
-              className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-800 outline-none transition focus:border-blue-400 focus:ring-4 focus:ring-blue-100"
+      <div className="max-w-2xl mx-auto pt-10 px-6">
+        <AnimatePresence mode="wait">
+          {showFinishScreen ? (
+            // 2. BİTİŞ VE GEÇİŞ EKRANI
+            <motion.div 
+              key="finish" 
+              initial={{ opacity: 0, scale: 0.9 }} 
+              animate={{ opacity: 1, scale: 1 }}
+              className="text-center py-16 bg-indigo-600 rounded-[3rem] text-white shadow-2xl px-10 relative overflow-hidden"
             >
-              <option value="">No task selected</option>
-              {tasks.map((t) => (
-                <option key={t.id} value={t.id}>
-                  {t.title}
-                </option>
-              ))}
-            </select>
-
-            <p className="mt-2 text-xs text-slate-400">
-              Selected task id: {selectedTaskId || "-"}
-            </p>
-          </div>
-
-          {/* Timer + Ring */}
-          <div className="my-10 flex justify-center">
-            <div className="relative h-[220px] w-[220px]">
-              <svg className="absolute inset-0 -rotate-90" width="220" height="220">
-                {/* Arka daire */}
-                <circle
-                  cx="110"
-                  cy="110"
-                  r={radius}
-                  fill="transparent"
-                  stroke="#e5e7eb"
-                  strokeWidth="10"
-                />
-                {/* İlerleme dairesi */}
-                <circle
-                  cx="110"
-                  cy="110"
-                  r={radius}
-                  fill="transparent"
-                  stroke="#2563eb"
-                  strokeWidth="10"
-                  strokeDasharray={circumference}
-                  strokeDashoffset={strokeDashoffset}
-                  strokeLinecap="round"
-                  className="transition-all duration-1000"
-                />
-              </svg>
-
-              <div className="absolute inset-0 flex items-center justify-center">
-                <div className="text-5xl font-semibold text-blue-700">
-                  {formatTime(secondsLeft)}
+              <div className="relative z-10">
+                <h2 className="text-5xl font-black mb-4">
+                  {isBreak ? "Focus Done! 🎉" : "Break Over! ⚡"}
+                </h2>
+                <p className="text-indigo-100 mb-12 text-lg font-medium">
+                  {isBreak 
+                    ? "Great work! Ready for a 5-minute break?" 
+                    : "Hope you feel refreshed. Ready to dive back in?"}
+                </p>
+                <div className="flex flex-col gap-4">
+                  <button 
+                    onClick={startNextImmediately} 
+                    className="bg-white text-indigo-600 py-6 rounded-[2rem] font-black text-2xl shadow-xl hover:scale-105 active:scale-95 transition-all uppercase tracking-tighter"
+                  >
+                    {isBreak ? "Start Break Now →" : "Start Next Session →"}
+                  </button>
+                  <button 
+                    onClick={() => setShowFinishScreen(false)} 
+                    className="text-indigo-200 font-bold uppercase text-xs tracking-[0.3em] mt-6 hover:text-white transition-colors"
+                  >
+                    Return to Mission Control
+                  </button>
                 </div>
               </div>
-            </div>
-          </div>
+            </motion.div>
+          ) : (
+            // 3. SEÇİM EKRANI
+            <motion.div key="select" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
+              <div className="text-center mb-12">
+                <h2 className="text-4xl font-black dark:text-white tracking-tight italic">The Void</h2>
+                <p className="text-slate-500 mt-3 font-medium">Choose your task and vanish from the world.</p>
+              </div>
 
-          {/* Actions */}
-          <div className="flex items-center justify-center gap-4">
-            <button
-              onClick={handleToggle}
-              className="rounded-xl bg-blue-600 px-8 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-700 active:scale-[0.98]"
-            >
-              {primaryLabel}
-            </button>
+              <div className="grid gap-4">
+                {tasks.filter(t => !t.done).map(task => (
+                  <button 
+                    key={task.id} 
+                    onClick={() => setSelectedTaskId(task.id)}
+                    className={`p-8 rounded-[2.5rem] border-2 transition-all text-left flex justify-between items-center ${
+                      selectedTaskId === task.id 
+                        ? 'border-indigo-600 bg-indigo-50 dark:bg-indigo-500/10 shadow-lg' 
+                        : 'border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-900'
+                    }`}
+                  >
+                    <div>
+                      <span className={`text-xl font-black block ${selectedTaskId === task.id ? 'text-indigo-600' : 'text-slate-700 dark:text-slate-200'}`}>
+                        {task.title}
+                      </span>
+                      <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+                        Progress: {task.completedPomodoros} / {task.targetPomodoros}
+                      </span>
+                    </div>
+                    {selectedTaskId === task.id && <div className="w-4 h-4 rounded-full bg-indigo-500 animate-pulse" />}
+                  </button>
+                ))}
+              </div>
 
-            <button
-              onClick={handleReset}
-              className="rounded-xl border border-slate-200 px-6 py-3 text-sm font-medium text-slate-600 transition hover:bg-slate-50"
-            >
-              Reset
-            </button>
-          </div>
-
-          {/* Alt bilgi */}
-          <div className="mt-6 rounded-2xl border border-slate-100 bg-slate-50 px-4 py-3">
-            <p className="text-xs text-slate-500">
-              Tip: Choose a task, then start your session.
-            </p>
-          </div>
-        </div>
+              <button 
+                disabled={!selectedTaskId} 
+                onClick={() => { setIsBreak(false); setTimeLeft(25*60); setIsActive(true); }}
+                className="w-full mt-12 py-8 bg-indigo-600 text-white rounded-[3rem] font-black text-2xl shadow-[0_20px_50px_rgba(79,70,229,0.3)] disabled:opacity-10 disabled:grayscale uppercase tracking-widest transition-all hover:bg-indigo-700"
+              >
+                Initiate Focus
+              </button>
+            </motion.div>
+          )}
+        </AnimatePresence>
       </div>
-
-      {/* ✅ Success overlay */}
-      {showSuccess && (
-        <div className="fixed inset-0 z-[999] grid place-items-center bg-black/20 backdrop-blur-sm">
-          <div className="mt-6 flex justify-end">
-  <button
-    onClick={() => setShowSuccess(false)}
-    className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-blue-700"
-  >
-    Continue
-  </button>
-</div>
-
-          <div className="w-[320px] rounded-2xl border border-blue-100 bg-white p-6 shadow-lg animate-[pop_250ms_ease-out]">
-            <p className="text-sm font-semibold text-slate-900">
-              ✅ Session completed
-            </p>
-            <p className="mt-1 text-xs text-slate-500">Nice! Keep going.</p>
-
-            <div className="mt-4 flex items-center justify-between">
-              <span className="rounded-full bg-blue-50 px-3 py-1 text-xs font-medium text-blue-700">
-                +25 min focus
-              </span>
-              <span className="text-xl">🎉</span>
-            </div>
-          </div>
-
-          <style jsx>{`
-            @keyframes pop {
-              from {
-                transform: scale(0.96);
-                opacity: 0;
-              }
-              to {
-                transform: scale(1);
-                opacity: 1;
-              }
-            }
-          `}</style>
-        </div>
-      )}
     </MainLayout>
   );
 }
