@@ -1,66 +1,30 @@
+// components/layout/MainLayout.tsx
 "use client";
-
-import React, { useEffect, useState } from "react";
-import Navbar from "@/components/layout/Navbar";
+import Navbar from "./Navbar";
+import { motion } from "framer-motion";
 
 export default function MainLayout({ children }: { children: React.ReactNode }) {
-  const [theme, setTheme] = useState<"light" | "dark">("light");
-
-  useEffect(() => {
-    const saved = localStorage.getItem("theme");
-    const initial = saved === "dark" ? "dark" : "light";
-    setTheme(initial);
-    document.documentElement.classList.toggle("dark", initial === "dark");
-  }, []);
-
-  const toggleTheme = () => {
-    const next = theme === "light" ? "dark" : "light";
-    setTheme(next);
-    localStorage.setItem("theme", next);
-    document.documentElement.classList.toggle("dark", next === "dark");
-  };
-
   return (
-    /* Arka Plan: Yumuşak geçişli ve modern derinlik */
-    <div className="min-h-screen transition-colors duration-500 bg-slate-50 dark:bg-[#020617] text-slate-900 dark:text-slate-100">
-      
-      {/* Header: Cam Efekti (Glassmorphism) */}
-      <header className="sticky top-0 z-50 border-b border-slate-200/60 bg-white/80 backdrop-blur-md dark:border-slate-800/60 dark:bg-[#020617]/80">
-        <div className="mx-auto max-w-5xl px-4 py-4">
-          <div className="flex items-center justify-between">
-            <div className="group cursor-default">
-              <h1 className="text-xl font-bold tracking-tight text-slate-900 dark:text-white">
-                Pomodoro <span className="text-indigo-600 dark:text-indigo-400">+</span> ToDo
-              </h1>
-              <p className="text-[10px] uppercase tracking-widest text-slate-500 dark:text-slate-400 font-medium">
-                Focus • Plan • Repeat
-              </p>
-            </div>
+    /* Arka planı o istediğin buz mavisine çektik */
+    <div className="min-h-screen bg-[#F4F9FF] dark:bg-black text-slate-900 dark:text-white transition-colors duration-500">
+      <Navbar />
 
-            <Navbar theme={theme} onToggleTheme={toggleTheme} />
-          </div>
-        </div>
-      </header>
+      {/* Arka plana derinlik katan hafif parlamalar */}
+      <div className="fixed inset-0 pointer-events-none overflow-hidden z-0">
+        <div className="absolute top-[-5%] left-[-5%] w-[45%] h-[45%] bg-blue-500/5 blur-[120px] rounded-full dark:hidden" />
+        <div className="absolute bottom-[-10%] right-[-5%] w-[35%] h-[35%] bg-indigo-500/5 blur-[100px] rounded-full dark:hidden" />
+      </div>
 
-      {/* Ana İçerik Alanı */}
-      <main className="mx-auto max-w-5xl px-4 py-12">
-        <div className="relative">
-          {/* Arka planda hafif bir parlama efekti (Glow) - Sadece dark modda görünür */}
-          <div className="absolute -inset-1 rounded-[2rem] bg-gradient-to-r from-indigo-500 to-purple-500 opacity-20 blur-2xl dark:block hidden" />
-          
-          {/* İçerik Kartı */}
-          <div className="relative rounded-3xl border border-white/20 bg-white shadow-xl shadow-slate-200/50 dark:border-slate-800 dark:bg-slate-900/50 dark:shadow-none backdrop-blur-sm">
-            <div className="p-8">
-              {children}
-            </div>
-          </div>
-        </div>
+      {/* İÇERİĞİ ORTALAYAN ANA KAPSAYICI */}
+      <main className="relative z-10 pt-32 pb-20 px-4 sm:px-8 md:px-16 lg:px-24 max-w-7xl mx-auto">
+        <motion.div
+          initial={{ opacity: 0, y: 15 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.4, ease: "easeOut" }}
+        >
+          {children}
+        </motion.div>
       </main>
-
-      {/* Footer veya Alt Süsleme (Opsiyonel) */}
-      <footer className="py-8 text-center text-sm text-slate-400 dark:text-slate-600">
-        Built with focus
-      </footer>
     </div>
   );
-}
+} 

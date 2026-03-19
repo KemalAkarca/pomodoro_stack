@@ -5,16 +5,39 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Buradaki html, body yükseklik ayarı kalabilir, zararı yok */
-html,
-body {
-  height: 100%;
+:root {
+  /* Beyaz mod için hafif buz mavisi geçişi */
+  --background: #f8faff; 
+  --foreground: #0f172a;
+  --card-bg: #ffffff;
 }
 
-/* DİKKAT: Buradaki html ve html.dark renk tanımlamalarını SİLDİK.
-   Çünkü bu renkleri zaten MainLayout.tsx içinde Tailwind sınıflarıyla veriyorsun.
-*/
+.dark {
+  /* Koyu mod için derin siyah */
+  --background: #020617;
+  --foreground: #f8fafc;
+  --card-bg: rgba(255, 255, 255, 0.03);
+}
 
 body {
-  font-family: Arial, Helvetica, sans-serif;
+  background-color: var(--background);
+  /* Arka plana o görseldeki derinlik için hafif bir degrade ekleyelim */
+  background-image: 
+    radial-gradient(at 0% 0%, rgba(37, 99, 235, 0.05) 0px, transparent 50%),
+    radial-gradient(at 100% 0%, rgba(37, 99, 235, 0.05) 0px, transparent 50%);
+  color: var(--foreground);
+  font-family: 'Inter', sans-serif;
+  min-height: 100vh;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Scrollbar'ı tasarımına uygun şekilde gizleyelim */
+@layer utilities {
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+  .no-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
 }
